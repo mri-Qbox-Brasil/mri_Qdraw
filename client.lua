@@ -1,7 +1,7 @@
 ---------------------------------------------------
 ---[SETTINGS]
 ---------------------------------------------------
-local debug = true ---[PRINTS]
+local debug = false ---[PRINTS]
 local RENDER = 500 ---[RENDER DISTANCE]
 local EDIT = 4 ---[EDIT DISTANCE]
 ---------------------------------------------------
@@ -218,13 +218,14 @@ end
 function clmsg(data) 
     if debug then 
         print(data)
-        lib.notify({title = data, position = 'center-left'})
     end
+    lib.notify({title = data, position = 'center-left'})
+
 end
 
 function IsPlayerNear(playerCoords, vector, distance)
-    print(json.encode( playerCoords))
-    print(json.encode( vector))
+    -- print(json.encode( playerCoords))
+    -- print(json.encode( vector))
 
     local playerDistance = GetDistanceBetweenCoords(playerCoords,vector,true)
     return playerDistance <= distance 
