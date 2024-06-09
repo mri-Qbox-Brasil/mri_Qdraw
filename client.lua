@@ -175,6 +175,7 @@ end
 ---------------------------------------------------
 ---[RESET-REMOVE-UPDATE]
 ---------------------------------------------------
+
 function UpdateImage(texname,url)
     for i, v in pairs(REGISTRY) do
         local name = texname
@@ -189,7 +190,7 @@ end
 
 function Remove(texname)
     for i, v in pairs(REGISTRY) do
-        local name = v.texname
+        local name = texname
         if v.texname == name then 
             local duiobj = v.duiObj
             DestroyDui(duiobj)
@@ -316,11 +317,15 @@ function DevUi()
         while devmode do 
             local ped = GetPlayerPed(-1)
             local playerCoords = GetEntityCoords(ped)
+    
             for i, v in pairs(REGISTRY) do
+               
                 if IsPlayerNear(playerCoords,v.pos,EDIT) then 
                     DrawMarker(28, v.pos.x, v.pos.y, v.pos.z, 0.0, 0.0, 0.0, 0.0, 180.0, 0.0, 0.3, 0.3, 0.3, 255, 0, 0, 255, false, true, 2, nil, nil, false)
                     Draw2DText('Pressione   ~g~[   E   ]~w~   para ALTERAR', 4, {255, 255, 255}, 0.4, 0.55, 0.600)
                     Draw2DText('Pressione   ~r~[ DEL ]~w~   para EXCLUIR', 4, {255, 255, 255}, 0.4, 0.55, 0.622)
+                    Draw2DText('Pressione   ~y~[ BACKSPACE ]~w~   para FECHAR', 4, {255, 255, 255}, 0.4, 0.55, 0.644)
+
                     if IsControlJustReleased(0, 51) then ---[E EDIT]
                         local data = lib.inputDialog("Alterar poster in-game", {
                             {
@@ -353,6 +358,9 @@ function DevUi()
                             clmsg('[ACTION CANCELLATION NOTICE]')
                         end
                     end
+
+                    if IsControlJustReleased(0, 194) then return end ---[BACKSPACE CLOSE]
+               
                 end
             end
             Citizen.Wait(time)
