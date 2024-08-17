@@ -166,28 +166,26 @@ function DevUi()
     end)
 end
 
-RegisterCommand("rw_draw++/draw", function ()
-    DrawUi()
-end, true)
-
-RegisterCommand("rw_draw++/rem", function (source, args, rawCommand)
-    TriggerServerEvent("rw_draw++:rem", args[1])
-end, true)
-
-RegisterCommand("rw_draw++/img", function (source, args, rawCommand)
-    local input = lib.inputDialog('Dialog title', {
-        {type = 'input', label = 'Url', description = 'Url', required = true, default = "https://t4.ftcdn.net/jpg/02/77/71/45/360_F_277714513_fQ0akmI3TQxa0wkPCLeO12Rx3cL2AuIf.jpg"},
-    })
-    if not input then return end
-    local Url = input[1]
-    TriggerServerEvent("rw_draw++:rem", args[1],Url)
-end, true)
-
-RegisterCommand("rw_draw++/dev", function ()
-    dev_on = not dev_on
-    if dev_on then DevUi() end
-end, true)
-
+RegisterNetEvent('rw_draw++:cl:action')
+AddEventHandler('rw_draw++:cl:action', function(key)
+    if key == "draw" then
+        DrawUi()
+    end
+    if key == "dev" then
+        dev_on = not dev_on
+        if dev_on then DevUi() end
+    end
+    if key == "img" then
+        local input = lib.inputDialog('Dialog title', {
+            {type = 'number', label = 'Poster Id', description = 'You Can find in rw_draw++/dev', icon = 'hashtag'},
+            {type = 'input', label = 'Url', description = 'Url', required = true, default = "https://t4.ftcdn.net/jpg/02/77/71/45/360_F_277714513_fQ0akmI3TQxa0wkPCLeO12Rx3cL2AuIf.jpg"},
+        })
+        if not input then return end
+        local Key = input[1]
+        local Url = input[2]
+        TriggerServerEvent("rw_draw++:img",Key, Url)
+    end
+end)
 
 RegisterNetEvent('rw_draw++:cl:add')
 AddEventHandler('rw_draw++:cl:add', function(data)
