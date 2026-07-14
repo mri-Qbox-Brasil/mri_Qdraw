@@ -1,105 +1,162 @@
-# MANUAL - mri_Qdraw
+# mri_Qdraw — Manual
 
-## O que o recurso faz (descrição funcional)
-Sistema de posicionamento de imagens no espaço 3D do mundo do GTA V usando 4 vértices. Permite colocar imagens de URLs ou texturas locais, com renderização via nativas do jogo (sem NUI), persistência em data.json e ferramentas para desenvolvedores.
+Posiciona imagens de URL no mundo 3D como pôsteres, definidos por quatro vértices marcados em jogo e renderizados via DUI, sem NUI.
 
-## Funcionalidades principais
-- **Sistema de 4 vértices**: Posicionamento preciso usando 4 pontos de canto.
-- **Espaço 3D**: Imagens renderizadas no mundo, mantendo perspectiva correta.
-- **Suporte a URL e imagens locais**: Carrega de qualquer URL ou texturas streamed.
-- **Raycast picker**: Clique para posicionar vértices no mundo.
-- **Modo desenvolvedor**: Mostra marcadores, detecta imagens próximas, permite remoção rápida.
-- **Persistência**: Armazenamento em data.json, imagens persistem após reinício.
+---
 
-## Como funciona (fluxo de trabalho)
+## Sumário
 
-### Colocação de imagem
-1. Jogador usa comando `/draw` ou `rw_draw++` para alternar modo de desenho.
-2. Sistema usa raycast: jogador mira no mundo, clica para posicionar cada um dos 4 vértices.
-3. Após posicionar os 4 vértices, imagem é renderizada no espaço 3D.
+1. [Dependências](#dependências)
+2. [Instalação](#instalação)
+3. [Permissões (ACE)](#permissões-ace)
+4. [Configuração](#configuração)
+5. [Comandos](#comandos)
+6. [Criar um pôster](#criar-um-pôster)
+7. [Modo desenvolvedor](#modo-desenvolvedor)
+8. [Persistência e sincronização](#persistência-e-sincronização)
+9. [Entrypoints para outros recursos](#entrypoints-para-outros-recursos)
+10. [Estrutura de arquivos](#estrutura-de-arquivos)
 
-### Modo desenvolvedor (admin)
-1. Admin usa `/dev` para alternar modo desenvolvedor.
-2. Marcadores aparecem para imagens posicionadas, mostrando IDs.
-3. Admin pode remover imagens via `/rem <id>` ou adicionar via `/img <id> <url>`.
+---
 
-## Opções de configuração disponíveis
-Configurações em config/config.lua:
+## Dependências
 
-| Opção | Padrão | Descrição |
-|-------|--------|-----------|
-| Config.MaxImages | 50 | Máximo de imagens por servidor. |
-| Config.MaxImagesPerPlayer | 5 | Limite por jogador. |
-| Config.DevMode | true | Ativa recursos para desenvolvedores. |
-| Config.DevMarkerColor | {255, 0, 0, 100} | RGBA dos marcadores. |
-| Config.DefaultWidth | 1.0 | Largura padrão. |
-| Config.DefaultHeight | 1.0 | Altura padrão. |
-| Config.MaxDistance | 100.0 | Distância máxima de renderização. |
-| Config.AdminGroups | {'admin', 'god'} | Grupos com permissão. |
+| Recurso | Obrigatório | Observação |
+|---|---|---|
+| `ox_lib` | Sim | `lib.addCommand` e `lib.inputDialog` |
 
-## Comandos disponíveis
+Não depende de framework nem de banco de dados: os pôsteres ficam em `data.json`, dentro do próprio recurso.
+
+---
+
+## Instalação
+
+1. Copie a pasta `mri_Qdraw` para `resources/`.
+2. Adicione ao `server.cfg`:
+   ```
+   ensure mri_Qdraw
+   ```
+3. Garanta que o servidor tem permissão de escrita na pasta do recurso — o `data.json` é reescrito a cada criação, troca de imagem ou remoção (`SaveResourceFile`).
+4. Libere a ACE de admin (veja abaixo).
+
+Não há conflito conhecido com outros recursos.
+
+---
+
+## Permissões (ACE)
+
+Os quatro comandos são registrados com `lib.addCommand(..., restricted = 'group.admin')`, o que gera uma ACE `command.<nome>` para cada um:
+
+```
+add_ace group.admin command.rw_draw++/draw allow
+add_ace group.admin command.rw_draw++/dev allow
+add_ace group.admin command.rw_draw++/img allow
+add_ace group.admin command.rw_draw++/rem allow
+```
+
+Além disso, o servidor revalida quem criou ou trocou a imagem de um pôster com `IsPlayerAceAllowed(source, "command")` — sem essa ACE, o evento é descartado mesmo que o comando tenha passado.
+
+```
+add_ace group.admin command allow
+```
+
+---
+
+## Configuração
+
+Arquivo: `configuration.lua`.
+
+| Campo | Tipo | Obrigatório | Descrição |
+|---|---|---|---|
+| `DATA.Render_Distance` | number | Sim | Distância em metros a partir da qual o pôster deixa de ser desenhado. Medida do vértice superior esquerdo até o jogador |
+| `DATA.Edit_Distance` | number | Sim | Raio de busca do pôster mais próximo no modo desenvolvedor |
+| `DATA.Debug` | bool | Sim | Presente no config, mas os prints de diagnóstico (`Clmsg`) testam a global `debug` do Lua, não este campo |
+
+---
+
+## Comandos
+
 | Comando | Permissão | Descrição |
-|---------|------------|-------------|
-| `rw_draw++` | Todos | Alterna modo de desenho (alias). |
-| `draw` | Todos | Alterna modo de desenho (alias). |
-| `/dev` | Admin | Alterna modo desenvolvedor com marcadores. |
-| `/rem <id>` | Admin | Remove imagem por ID. |
-| `/img <id> <url>` | Admin | Adiciona nova imagem com URL. |
+|---|---|---|
+| `rw_draw++/draw` | ACE `command.rw_draw++/draw` | Inicia a marcação dos quatro vértices e cria o pôster |
+| `rw_draw++/dev` | ACE `command.rw_draw++/dev` | Liga/desliga o modo desenvolvedor |
+| `rw_draw++/img <uid> <url>` | ACE `command.rw_draw++/img` | Troca a imagem de um pôster existente. Os valores são pedidos em um diálogo |
+| `rw_draw++/rem <target>` | ACE `command.rw_draw++/rem` | Remove o pôster de UID `<target>` |
 
-## Eventos que dispara/ouve
+---
 
-### Cliente → Servidor
-| Evento | Parâmetros | Descrição |
-|--------|------------|-----------|
-| mri_Qdraw:client:toggleDraw | none | Alterna modo de desenho. |
-| mri_Qdraw:client:addImage | id, url, vertices | Adiciona nova imagem. |
-| mri_Qdraw:client:removeImage | id | Remove imagem por ID. |
-| mri_Qdraw:client:updateVertex | id, vertexIndex, coords | Atualiza posição do vértice. |
-| mri_Qdraw:client:toggleDevMode | none | Alterna modo desenvolvedor. |
+## Criar um pôster
 
-### Servidor → Cliente
-| Evento | Parâmetros | Descrição |
-|--------|------------|-----------|
-| mri_Qdraw:server:requestImages | none | Solicita todas as imagens do servidor. |
-| mri_Qdraw:server:saveImage | imageData | Salva imagem no data.json. |
-| mri_Qdraw:server:deleteImage | id | Deleta imagem do data.json. |
-| mri_Qdraw:server:syncImages | none | Sincroniza imagens com todos os clients. |
+1. Execute `rw_draw++/draw`.
+2. Mire com a câmera e marque, nesta ordem: **[1] superior esquerdo**, **[2] superior direito**, **[3] inferior esquerdo**, **[4] inferior direito**. Cada ponto é confirmado com `E` (a posição do raycast aparece na tela).
+3. `DEL` a qualquer momento cancela a criação.
+4. Preencha o diálogo com **Height**, **Width** (resolução do DUI, não o tamanho no mundo — a área é definida pelos vértices) e a **Url** da imagem.
+5. O pôster recebe um UID sequencial e é salvo.
 
-## Exports que fornece/consome
+A imagem é carregada em um DUI e desenhada como dois `DrawSpritePoly` formando o quadrilátero, então qualquer URL que o CEF consiga renderizar funciona.
 
-### Exports do cliente
-| Export | Parâmetros | Descrição |
-|--------|------------|-----------|
-| toggleDraw | none | Alterna modo de desenho. |
-| addImage | id, url, vertices | Adiciona imagem com 4 vértices. |
-| removeImage | id | Remove imagem. |
-| getImages | none | Obtém todas as imagens. |
-| toggleDevMode | none | Alterna modo desenvolvedor. |
+---
 
-### Exports do servidor
-| Export | Parâmetros | Descrição |
-|--------|------------|-----------|
-| getAllImages | none | Obtém todas as imagens. |
-| saveImage | imageData | Salva imagem. |
-| deleteImage | id | Deleta imagem. |
-| syncImages | none | Sincroniza com clients. |
+## Modo desenvolvedor
 
-### Exports consumidos
-Nenhum export externo consumido, usa ox_lib para UI e notificações.
+`rw_draw++/dev` liga um loop que localiza o pôster mais próximo dentro de `DATA.Edit_Distance` e:
 
-## Integração com outros recursos MRI Qbox
-- **ox_lib**: Componentes UI, notificações e raycast.
-- Outros recursos podem usar exports para adicionar imagens dinamicamente no mundo.
+- desenha um marcador em cada um dos quatro vértices;
+- mostra na tela o UID do pôster e os comandos prontos para remover (`rw_draw++/rem <uid>`) e trocar a imagem (`rw_draw++/img <uid>`).
 
-## Casos de uso / exemplos práticos
-1. **Sinalização de rua**: Admin coloca imagem de placa de rua usando `/img 1 url_da_placa`.
-2. **Propaganda em quadra**: Desenvolvedor usa modo de desenho para colocar banner publicitário em quadra de basquete.
-3. **Mapa personalizado**: Coloca imagem de mapa do servidor em parede de prédo.
-4. **Aviso de zona**: Imagem de "Área Restrita" posicionada em entrada de base policial.
+Execute o comando de novo para desligar.
 
-## Dicas de solução de problemas
-- **Imagem não aparece**: Verifique se a URL é acessível ou se a textura local está streamed.
-- **Modo de desenho não ativa**: Confira se o recurso está funcionando e não há conflitos de keybind.
-- **Performance baixa**: Reduza Config.MaxImages e Config.MaxDistance.
-- **data.json corrompido**: Verifique sintaxe JSON, faça backup regular.
-- **Modo dev não mostra marcadores**: Confirme que Config.DevMode está true e jogador é admin.
+---
+
+## Persistência e sincronização
+
+Os pôsteres ficam em `data.json`, na raiz do recurso. Ao entrar no servidor, o client dispara `rw_draw++:GetData` e recebe a lista completa.
+
+**Limitação conhecida:** criar, remover ou trocar a imagem de um pôster só é transmitido para o jogador que executou o comando (`TriggerClientEvent(..., source, ...)`). Os demais jogadores só veem a alteração ao reconectar ou depois de um restart do recurso — o `data.json` já está correto nesse meio-tempo.
+
+---
+
+## Entrypoints para outros recursos
+
+O recurso não expõe exports. Os eventos de servidor abaixo são a única superfície utilizável, e ambos exigem a ACE `command` do jogador que os dispara.
+
+```lua
+-- Cria um pôster. O UID é atribuído pelo servidor.
+TriggerServerEvent('rw_draw++:new', {
+    Data = {
+        Url    = 'https://exemplo.com/imagem.jpg',
+        Height = 1080,
+        Width  = 1920
+    },
+    Vertices = {
+        [1] = topLeft,      -- vector3
+        [2] = topRight,
+        [3] = bottomLeft,
+        [4] = bottomRight
+    }
+})
+
+-- Troca a imagem de um pôster existente.
+TriggerServerEvent('rw_draw++:img', uid, url)
+
+-- Pede a lista completa de pôsteres; responde com rw_draw++:cl:init.
+TriggerServerEvent('rw_draw++:GetData')
+```
+
+---
+
+## Estrutura de arquivos
+
+```
+mri_Qdraw/
+├── configuration.lua     — tabela DATA (distâncias e debug)
+├── data.json             — pôsteres persistidos (fonte da verdade)
+├── backend/
+│   ├── main.lua          — lista em memória, UIDs, criação/remoção/troca de imagem, gate de ACE
+│   ├── cmd.lua           — comandos rw_draw++/draw, /dev, /img, /rem
+│   └── save.lua          — leitura e escrita do data.json
+├── frontend/
+│   ├── main.lua          — raycast, marcação dos vértices, diálogos, modo desenvolvedor
+│   └── map.lua           — DUI, runtime txd e render dos pôsteres (DrawSpritePoly)
+└── fxmanifest.lua
+```
